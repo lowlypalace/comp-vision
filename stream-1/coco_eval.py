@@ -29,6 +29,8 @@ class CocoEvaluator:
         img_ids = list(np.unique(list(predictions.keys())))
         self.img_ids.extend(img_ids)
 
+        print(predictions)
+
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)
             with redirect_stdout(io.StringIO()):

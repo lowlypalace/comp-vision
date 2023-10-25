@@ -1,4 +1,4 @@
 data/test/*
 data/train/*
-data/val/*
+data/validation/*
 .DS_Store
