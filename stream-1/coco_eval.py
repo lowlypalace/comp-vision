@@ -9,7 +9,6 @@ import utils
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
-
 class CocoEvaluator:
     def __init__(self, coco_gt, iou_types):
         if not isinstance(iou_types, (list, tuple)):
@@ -28,8 +27,6 @@ class CocoEvaluator:
     def update(self, predictions):
         img_ids = list(np.unique(list(predictions.keys())))
         self.img_ids.extend(img_ids)
-
-        print(predictions)
 
         for iou_type in self.iou_types:
             results = self.prepare(predictions, iou_type)

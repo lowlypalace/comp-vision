@@ -1,5 +1,9 @@
 data/test/img*
 data/train/img*
 data/validation/img*
+train.zip
+validation.zip
+test.zip
+
 .DS_Store
 __pycache__/*
