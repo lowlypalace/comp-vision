@@ -1,5 +1,5 @@
-data/test/*
-data/train/*
-data/validation/*
+data/test/img*
+data/train/img*
+data/validation/img*
 .DS_Store
 __pycache__/*
