@@ -2,3 +2,4 @@ data/test/*
 data/train/*
 data/validation/*
 .DS_Store
+__pycache__/*
