@@ -35,96 +35,94 @@ from transforms import SimpleCopyPaste
 from torchvision.transforms import v2 as T
 from torchvision.transforms.v2 import functional as F
 from torchvision import tv_tensors
-from spark_utils import PyTorchSparkDataset
 
-class PyTorchSparkDatasetV2(torch.utils.data.Dataset):
-
-    def __init__(self, class_map, split='train', root_dir='./data/', transforms=None):
-        super().__init__()
-        self.dataset = PyTorchSparkDataset(class_map, split=split, root_dir=root_dir)
-        self.transforms = transforms
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        img, label, bbox = self.dataset[idx]
-
-        img = tv_tensors.Image(img)
-
-        bbox = tv_tensors.BoundingBoxes(bbox,
-                                        format=tv_tensors.BoundingBoxFormat.XYXY,
-                                        canvas_size=F.get_size(img))
-        label = torch.tensor([label])
-        area = (bbox[:, 3] - bbox[:, 1]) * (bbox[:, 2] - bbox[:, 0])
-        iscrowd = torch.zeros((1,), dtype=torch.int64)
-        image_id = idx
-
-        target = {
-            'boxes': bbox,
-            'labels': label,
-            'area': area,
-            'iscrowd': iscrowd,
-            'image_id': image_id,
-        }
-
-        if self.transforms is not None:
-            img, target = self.transforms(img, target)
-
-        return img, target
+from spark_utils import PyTorchSparkDatasetV2
+from spark_utils import get_transform
 
 
 def copypaste_collate_fn(batch):
-    copypaste = SimpleCopyPaste(blending=True, resize_interpolation=InterpolationMode.BILINEAR)
+    copypaste = SimpleCopyPaste(
+        blending=True, resize_interpolation=InterpolationMode.BILINEAR
+    )
     return copypaste(*utils.collate_fn(batch))
 
-# Define the transforms to be applied to the data.
-def get_transform(is_train):
-    transforms = []
-    transforms.append(T.ToImage())
 
-    if is_train:
-        transforms.append(T.RandomPhotometricDistort(p = 0.5))
-        transforms.append(T.RandomZoomOut(fill={tv_tensors.Image: (123, 117, 104), "others": 0}))
-        transforms.append(T.RandomIoUCrop())
-        transforms.append(T.RandomHorizontalFlip(p = 0.5))
-        transforms.append(T.RandomVerticalFlip(p = 0.5))
-        transforms.append(T.SanitizeBoundingBoxes())
-
-    transforms.append(T.ToDtype(torch.float, scale=True))
-    transforms.append(T.ToPureTensor())
-
-    return T.Compose(transforms)
-
-def get_dataset(is_train, class_map, data_path):
+def get_dataset(is_train, data_path, sample_size):
+    class_map = {
+        "proba_2": 0,
+        "cheops": 1,
+        "debris": 2,
+        "double_star": 3,
+        "earth_observation_sat_1": 4,
+        "lisa_pathfinder": 5,
+        "proba_3_csc": 6,
+        "proba_3_ocs": 7,
+        "smart_1": 8,
+        "soho": 9,
+        "xmm_newton": 10,
+    }
 
     split = "train" if is_train else "validation"
 
-    # We use the PyTorchSparkDatasetV2 class defined above.
-    dataset = PyTorchSparkDatasetV2(class_map=class_map,
-                                    split=split,
-                                    root_dir=data_path,
-                                    transforms=get_transform(is_train))
+    dataset = PyTorchSparkDatasetV2(
+        class_map=class_map,
+        split=split,
+        root_dir=data_path,
+        transforms=get_transform(is_train),
+        sample_size=sample_size,
+    )
 
     num_classes = len(class_map)
 
     return dataset, num_classes
 
+
+def copypaste_collate_fn(batch):
+    copypaste = SimpleCopyPaste(
+        blending=True, resize_interpolation=InterpolationMode.BILINEAR
+    )
+    return copypaste(*utils.collate_fn(batch))
+
+
 def get_args_parser(add_help=True):
     import argparse
 
-    parser = argparse.ArgumentParser(description="PyTorch Detection Training", add_help=add_help)
+    parser = argparse.ArgumentParser(
+        description="PyTorch Detection Training", add_help=add_help
+    )
 
     parser.add_argument("--data-path", default="./data/", type=str, help="dataset path")
 
-    parser.add_argument("--model", default="maskrcnn_resnet50_fpn", type=str, help="model name")
-    parser.add_argument("--device", default="cuda", type=str, help="device (Use cuda or cpu Default: cuda)")
     parser.add_argument(
-        "-b", "--batch-size", default=2, type=int, help="images per gpu, the total batch size is $NGPU x batch_size"
+        "--model", default="maskrcnn_resnet50_fpn", type=str, help="model name"
     )
-    parser.add_argument("--epochs", default=26, type=int, metavar="N", help="number of total epochs to run")
     parser.add_argument(
-        "-j", "--workers", default=4, type=int, metavar="N", help="number of data loading workers (default: 4)"
+        "--device",
+        default="cuda",
+        type=str,
+        help="device (Use cuda or cpu Default: cuda)",
+    )
+    parser.add_argument(
+        "-b",
+        "--batch-size",
+        default=2,
+        type=int,
+        help="images per gpu, the total batch size is $NGPU x batch_size",
+    )
+    parser.add_argument(
+        "--epochs",
+        default=26,
+        type=int,
+        metavar="N",
+        help="number of total epochs to run",
+    )
+    parser.add_argument(
+        "-j",
+        "--workers",
+        default=4,
+        type=int,
+        metavar="N",
+        help="number of data loading workers (default: 4)",
     )
     parser.add_argument("--opt", default="sgd", type=str, help="optimizer")
     parser.add_argument(
@@ -133,7 +131,9 @@ def get_args_parser(add_help=True):
         type=float,
         help="initial learning rate, 0.02 is the default value for training on 8 gpus and 2 images_per_gpu",
     )
-    parser.add_argument("--momentum", default=0.9, type=float, metavar="M", help="momentum")
+    parser.add_argument(
+        "--momentum", default=0.9, type=float, metavar="M", help="momentum"
+    )
     parser.add_argument(
         "--wd",
         "--weight-decay",
@@ -150,10 +150,16 @@ def get_args_parser(add_help=True):
         help="weight decay for Normalization layers (default: None, same value as --wd)",
     )
     parser.add_argument(
-        "--lr-scheduler", default="multisteplr", type=str, help="name of lr scheduler (default: multisteplr)"
+        "--lr-scheduler",
+        default="multisteplr",
+        type=str,
+        help="name of lr scheduler (default: multisteplr)",
     )
     parser.add_argument(
-        "--lr-step-size", default=8, type=int, help="decrease lr every step-size epochs (multisteplr scheduler only)"
+        "--lr-step-size",
+        default=8,
+        type=int,
+        help="decrease lr every step-size epochs (multisteplr scheduler only)",
     )
     parser.add_argument(
         "--lr-steps",
@@ -163,19 +169,35 @@ def get_args_parser(add_help=True):
         help="decrease lr every step-size epochs (multisteplr scheduler only)",
     )
     parser.add_argument(
-        "--lr-gamma", default=0.1, type=float, help="decrease lr by a factor of lr-gamma (multisteplr scheduler only)"
+        "--lr-gamma",
+        default=0.1,
+        type=float,
+        help="decrease lr by a factor of lr-gamma (multisteplr scheduler only)",
     )
     parser.add_argument("--print-freq", default=20, type=int, help="print frequency")
-    parser.add_argument("--output-dir", default=".", type=str, help="path to save outputs")
+    parser.add_argument(
+        "--output-dir", default=".", type=str, help="path to save outputs"
+    )
     parser.add_argument("--resume", default="", type=str, help="path of checkpoint")
     parser.add_argument("--start_epoch", default=0, type=int, help="start epoch")
     parser.add_argument("--aspect-ratio-group-factor", default=3, type=int)
-    parser.add_argument("--rpn-score-thresh", default=None, type=float, help="rpn score threshold for faster-rcnn")
     parser.add_argument(
-        "--trainable-backbone-layers", default=None, type=int, help="number of trainable layers of backbone"
+        "--rpn-score-thresh",
+        default=None,
+        type=float,
+        help="rpn score threshold for faster-rcnn",
     )
     parser.add_argument(
-        "--data-augmentation", default="hflip", type=str, help="data augmentation policy (default: hflip)"
+        "--trainable-backbone-layers",
+        default=None,
+        type=int,
+        help="number of trainable layers of backbone",
+    )
+    parser.add_argument(
+        "--data-augmentation",
+        default="hflip",
+        type=str,
+        help="data augmentation policy (default: hflip)",
     )
     parser.add_argument(
         "--sync-bn",
@@ -191,17 +213,37 @@ def get_args_parser(add_help=True):
     )
 
     parser.add_argument(
-        "--use-deterministic-algorithms", action="store_true", help="Forces the use of deterministic algorithms only."
+        "--use-deterministic-algorithms",
+        action="store_true",
+        help="Forces the use of deterministic algorithms only.",
     )
 
     # distributed training parameters
-    parser.add_argument("--world-size", default=1, type=int, help="number of distributed processes")
-    parser.add_argument("--dist-url", default="env://", type=str, help="url used to set up distributed training")
-    parser.add_argument("--weights", default=None, type=str, help="the weights enum name to load")
-    parser.add_argument("--weights-backbone", default=None, type=str, help="the backbone weights enum name to load")
+    parser.add_argument(
+        "--world-size", default=1, type=int, help="number of distributed processes"
+    )
+    parser.add_argument(
+        "--dist-url",
+        default="env://",
+        type=str,
+        help="url used to set up distributed training",
+    )
+    parser.add_argument(
+        "--weights", default=None, type=str, help="the weights enum name to load"
+    )
+    parser.add_argument(
+        "--weights-backbone",
+        default=None,
+        type=str,
+        help="the backbone weights enum name to load",
+    )
 
     # Mixed precision training parameters
-    parser.add_argument("--amp", action="store_true", help="Use torch.cuda.amp for mixed precision training")
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="Use torch.cuda.amp for mixed precision training",
+    )
 
     # Use CopyPaste augmentation training parameter
     parser.add_argument(
@@ -210,11 +252,23 @@ def get_args_parser(add_help=True):
         help="Use CopyPaste data augmentation. Works only with data-augmentation='lsj'.",
     )
 
+    parser.add_argument(
+        "--train-sample-size",
+        default=1,
+        type=float,
+        help="percentage of training data to use",
+    )
+    parser.add_argument(
+        "--test-sample-size",
+        default=1,
+        type=float,
+        help="percentage of test data to use",
+    )
+
     return parser
 
 
 def main(args):
-
     if args.output_dir:
         utils.mkdir(args.output_dir)
 
@@ -229,39 +283,60 @@ def main(args):
     # Data loading code
     print("Loading data")
 
-    class_map = {'proba_2':0, 'cheops':1, 'debris':2, 'double_star':3, 'earth_observation_sat_1':4, 'lisa_pathfinder':5,
-                            'proba_3_csc' :6, 'proba_3_ocs':7, 'smart_1':8, 'soho':9, 'xmm_newton':10}
+    dataset, num_classes = get_dataset(
+        is_train=True, data_path=args.data_path, sample_size=args.train_sample_size
+    )
+    dataset_test, _ = get_dataset(
+        is_train=False, data_path=args.data_path, sample_size=args.test_sample_size
+    )
 
-    dataset, num_classes = get_dataset(is_train=True, class_map=class_map, data_path=args.data_path)
-    dataset_test, _ = get_dataset(is_train=False, class_map=class_map, data_path=args.data_path)
+    print(f"Number of training samples: {len(dataset)}")
+    print(f"Number of validation samples: {len(dataset_test)}\n")
 
     print("Creating data loaders")
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(dataset)
-        test_sampler = torch.utils.data.distributed.DistributedSampler(dataset_test, shuffle=False)
+        test_sampler = torch.utils.data.distributed.DistributedSampler(
+            dataset_test, shuffle=False
+        )
     else:
         train_sampler = torch.utils.data.RandomSampler(dataset)
         test_sampler = torch.utils.data.SequentialSampler(dataset_test)
 
     if args.aspect_ratio_group_factor >= 0:
-        group_ids = create_aspect_ratio_groups(dataset, k=args.aspect_ratio_group_factor)
-        train_batch_sampler = GroupedBatchSampler(train_sampler, group_ids, args.batch_size)
+        group_ids = create_aspect_ratio_groups(
+            dataset, k=args.aspect_ratio_group_factor
+        )
+        train_batch_sampler = GroupedBatchSampler(
+            train_sampler, group_ids, args.batch_size
+        )
     else:
-        train_batch_sampler = torch.utils.data.BatchSampler(train_sampler, args.batch_size, drop_last=True)
+        train_batch_sampler = torch.utils.data.BatchSampler(
+            train_sampler, args.batch_size, drop_last=True
+        )
 
     train_collate_fn = utils.collate_fn
     if args.use_copypaste:
         if args.data_augmentation != "lsj":
-            raise RuntimeError("SimpleCopyPaste algorithm currently only supports the 'lsj' data augmentation policies")
+            raise RuntimeError(
+                "SimpleCopyPaste algorithm currently only supports the 'lsj' data augmentation policies"
+            )
 
         train_collate_fn = copypaste_collate_fn
 
     data_loader = torch.utils.data.DataLoader(
-        dataset, batch_sampler=train_batch_sampler, num_workers=args.workers, collate_fn=train_collate_fn
+        dataset,
+        batch_sampler=train_batch_sampler,
+        num_workers=args.workers,
+        collate_fn=train_collate_fn,
     )
 
     data_loader_test = torch.utils.data.DataLoader(
-        dataset_test, batch_size=1, sampler=test_sampler, num_workers=args.workers, collate_fn=utils.collate_fn
+        dataset_test,
+        batch_size=1,
+        sampler=test_sampler,
+        num_workers=args.workers,
+        collate_fn=utils.collate_fn,
     )
 
     print("Creating model")
@@ -272,7 +347,11 @@ def main(args):
         if args.rpn_score_thresh is not None:
             kwargs["rpn_score_thresh"] = args.rpn_score_thresh
     model = torchvision.models.get_model(
-        args.model, weights=args.weights, weights_backbone=args.weights_backbone, num_classes=num_classes, **kwargs
+        args.model,
+        weights=args.weights,
+        weights_backbone=args.weights_backbone,
+        num_classes=num_classes,
+        **kwargs,
     )
     model.to(device)
     if args.distributed and args.sync_bn:
@@ -288,7 +367,11 @@ def main(args):
     else:
         param_groups = torchvision.ops._utils.split_normalization_params(model)
         wd_groups = [args.norm_weight_decay, args.weight_decay]
-        parameters = [{"params": p, "weight_decay": w} for p, w in zip(param_groups, wd_groups) if p]
+        parameters = [
+            {"params": p, "weight_decay": w}
+            for p, w in zip(param_groups, wd_groups)
+            if p
+        ]
 
     opt_name = args.opt.lower()
     if opt_name.startswith("sgd"):
@@ -300,17 +383,25 @@ def main(args):
             nesterov="nesterov" in opt_name,
         )
     elif opt_name == "adamw":
-        optimizer = torch.optim.AdamW(parameters, lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.AdamW(
+            parameters, lr=args.lr, weight_decay=args.weight_decay
+        )
     else:
-        raise RuntimeError(f"Invalid optimizer {args.opt}. Only SGD and AdamW are supported.")
+        raise RuntimeError(
+            f"Invalid optimizer {args.opt}. Only SGD and AdamW are supported."
+        )
 
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
 
     args.lr_scheduler = args.lr_scheduler.lower()
     if args.lr_scheduler == "multisteplr":
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_steps, gamma=args.lr_gamma)
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=args.lr_steps, gamma=args.lr_gamma
+        )
     elif args.lr_scheduler == "cosineannealinglr":
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.epochs
+        )
     else:
         raise RuntimeError(
             f"Invalid lr scheduler '{args.lr_scheduler}'. Only MultiStepLR and CosineAnnealingLR are supported."
@@ -335,7 +426,9 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-        train_one_epoch(model, optimizer, data_loader, device, epoch, args.print_freq, scaler)
+        train_one_epoch(
+            model, optimizer, data_loader, device, epoch, args.print_freq, scaler
+        )
         lr_scheduler.step()
         if args.output_dir:
             checkpoint = {
@@ -347,8 +440,12 @@ def main(args):
             }
             if args.amp:
                 checkpoint["scaler"] = scaler.state_dict()
-            utils.save_on_master(checkpoint, os.path.join(args.output_dir, f"model_{epoch}.pth"))
-            utils.save_on_master(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
+            utils.save_on_master(
+                checkpoint, os.path.join(args.output_dir, f"model_{epoch}.pth")
+            )
+            utils.save_on_master(
+                checkpoint, os.path.join(args.output_dir, "checkpoint.pth")
+            )
 
         # evaluate after every epoch
         evaluate(model, data_loader_test, device=device)
