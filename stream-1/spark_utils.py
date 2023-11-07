@@ -221,7 +221,7 @@ if has_pytorch:
                 bbox = self.labels.iloc[idx]["bbox"]
                 bbox = literal_eval(bbox)
 
-                return torch_image, self.class_map[sat_name], torch.tensor(bbox)
+                return torch_image, self.class_map[sat_name], torch.tensor(bbox), img_name
 
             return torch_image, torch.tensor(self.class_map[sat_name])
 
