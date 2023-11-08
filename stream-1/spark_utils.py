@@ -5,13 +5,8 @@ from skimage import io
 import pandas as pd
 import matplotlib.patches as mpatches
 
-from torchvision import tv_tensors
-
-from torchvision.transforms import v2 as T
-from torchvision.transforms.v2 import functional as F
 from torch.utils.data import Dataset
-
-import torch
+from torch import tensor, from_numpy
 
 def process_labels(labels_dir, split, sample_size):
     if split == "test":
@@ -33,73 +28,6 @@ def process_labels(labels_dir, split, sample_size):
             .reset_index(drop=True)
         )
         return sampled_labels
-
-
-class PyTorchSparkDatasetV2(torch.utils.data.Dataset):
-    def __init__(
-        self,
-        class_map,
-        split="train",
-        root_dir="./data/",
-        transforms=None,
-        sample_size=1,
-    ):
-        super().__init__()
-        self.dataset = PyTorchSparkDataset(
-            class_map, split=split, root_dir=root_dir, sample_size=sample_size
-        )
-        self.transforms = transforms
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        img, label, bbox = self.dataset[idx]
-
-        img = tv_tensors.Image(img)
-
-        bbox = tv_tensors.BoundingBoxes(
-            bbox, format=tv_tensors.BoundingBoxFormat.XYXY, canvas_size=F.get_size(img)
-        )
-        label = torch.tensor([label])
-        area = (bbox[:, 3] - bbox[:, 1]) * (bbox[:, 2] - bbox[:, 0])
-        iscrowd = torch.zeros((1,), dtype=torch.int64)
-        image_id = idx
-
-        target = {
-            "boxes": bbox,
-            "labels": label,
-            "area": area,
-            "iscrowd": iscrowd,
-            "image_id": image_id,
-        }
-
-        if self.transforms is not None:
-            img, target = self.transforms(img, target)
-
-        return img, target
-
-
-# Define the transforms to be applied to the data.
-def get_transform(is_train):
-    transforms = []
-    transforms.append(T.ToImage())
-
-    if is_train:
-        transforms.append(T.RandomPhotometricDistort(p=0.5))
-        transforms.append(
-            T.RandomZoomOut(fill={tv_tensors.Image: (123, 117, 104), "others": 0})
-        )
-        transforms.append(T.RandomIoUCrop())
-        transforms.append(T.RandomHorizontalFlip(p=0.5))
-        transforms.append(T.RandomVerticalFlip(p=0.5))
-        transforms.append(T.SanitizeBoundingBoxes())
-
-    transforms.append(T.ToDtype(torch.float, scale=True))
-    transforms.append(T.ToPureTensor())
-
-    return T.Compose(transforms)
-
 
 class SPARKDataset:
 
@@ -189,7 +117,7 @@ class PyTorchSparkDataset(Dataset):
         image_name = f"{self.root_dir}/{img_name}"
 
         image = io.imread(image_name)
-        torch_image = torch.from_numpy(image).permute(2, 1, 0)
+        torch_image = from_numpy(image).permute(2, 1, 0)
 
         if self.split == 'test':
             return torch_image, img_name
@@ -198,6 +126,6 @@ class PyTorchSparkDataset(Dataset):
             sat_name = self.labels.iloc[idx]["class"]
             bbox = self.labels.iloc[idx]["bbox"]
             bbox = literal_eval(bbox)
-            return torch_image, self.class_map[sat_name], torch.tensor(bbox)
+            return torch_image, self.class_map[sat_name], tensor(bbox)
 
 
