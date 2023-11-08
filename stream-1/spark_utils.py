@@ -9,9 +9,6 @@ from torch.utils.data import Dataset
 from torch import tensor, from_numpy
 
 def process_labels(labels_dir, split, sample_size):
-    if split == "test":
-        raise ValueError("Cannot sample from test set")
-
     path = os.path.join(labels_dir, f"{split}.csv")
     labels = pd.read_csv(path)
 
@@ -98,10 +95,13 @@ class PyTorchSparkDataset(Dataset):
         transform=None,
         sample_size=1,
     ):
+
         if split not in {"train", "validation", "test"}:
             raise ValueError(
                 "Invalid split, has to be either 'train', 'validation' or 'test'"
             )
+        if split == "test" and sample_size != 1:
+            raise ValueError("Cannot sample from test set")
 
         self.class_map = class_map
         self.split = split
@@ -127,5 +127,3 @@ class PyTorchSparkDataset(Dataset):
             bbox = self.labels.iloc[idx]["bbox"]
             bbox = literal_eval(bbox)
             return torch_image, self.class_map[sat_name], tensor(bbox)
-
-
