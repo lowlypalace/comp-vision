@@ -4,7 +4,6 @@ data/validation/img*
 train.zip
 validation.zip
 test.zip
-predictions.csv
 visualize_data.py
 
 .DS_Store
