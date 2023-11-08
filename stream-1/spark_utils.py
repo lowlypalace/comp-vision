@@ -12,7 +12,6 @@ from torchvision.transforms.v2 import functional as F
 
 import torch
 
-
 def process_labels(labels_dir, split, sample_size):
     path = os.path.join(labels_dir, f"{split}.csv")
     labels = pd.read_csv(path)
@@ -221,7 +220,7 @@ if has_pytorch:
                 bbox = self.labels.iloc[idx]["bbox"]
                 bbox = literal_eval(bbox)
 
-                return torch_image, self.class_map[sat_name], torch.tensor(bbox), img_name
+                return torch_image, self.class_map[sat_name], torch.tensor(bbox)
 
             return torch_image, torch.tensor(self.class_map[sat_name])
 
