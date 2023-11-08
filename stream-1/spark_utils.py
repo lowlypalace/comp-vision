@@ -9,6 +9,7 @@ from torchvision import tv_tensors
 
 from torchvision.transforms import v2 as T
 from torchvision.transforms.v2 import functional as F
+from torch.utils.data import Dataset
 
 import torch
 
@@ -155,77 +156,45 @@ class SPARKDataset:
 
         return
 
+class PyTorchSparkDataset(Dataset):
 
-try:
-    import torch
-    from torch.utils.data import Dataset
-    from torchvision import transforms
+    """SPARK dataset that can be used with DataLoader for PyTorch training."""
+    def __init__(
+        self,
+        class_map,
+        split="train",
+        root_dir="",
+        transform=None,
+        sample_size=1,
+    ):
+        if split not in {"train", "validation", "test"}:
+            raise ValueError(
+                "Invalid split, has to be either 'train', 'validation' or 'test'"
+            )
 
-    has_pytorch = True
-    print("Found Pytorch")
-except ImportError:
-    has_pytorch = False
+        self.class_map = class_map
+        self.split = split
+        self.root_dir = os.path.join(root_dir, self.split)
+        self.labels = process_labels(root_dir, split, sample_size)
+        self.transform = transform
 
+    def __len__(self):
+        return len(self.labels)
 
-if has_pytorch:
+    def __getitem__(self, idx):
+        img_name = self.labels.iloc[idx]["filename"]
+        image_name = f"{self.root_dir}/{img_name}"
 
-    class PyTorchSparkDataset(Dataset):
+        image = io.imread(image_name)
+        torch_image = torch.from_numpy(image).permute(2, 1, 0)
 
-        """SPARK dataset that can be used with DataLoader for PyTorch training."""
+        if self.split == 'test':
+            return torch_image, image_name
 
-        def __init__(
-            self,
-            class_map,
-            split="train",
-            root_dir="",
-            transform=None,
-            detection=True,
-            sample_size=1,
-        ):
-            if not has_pytorch:
-                raise ImportError("Pytorch was not imported successfully!")
-
-            if split not in {"train", "validation", "test"}:
-                raise ValueError(
-                    "Invalid split, has to be either 'train', 'validation' or 'test'"
-                )
-
-            self.class_map = class_map
-
-            self.detection = detection
-            self.split = split
-            self.root_dir = os.path.join(root_dir, self.split)
-
-            self.labels = process_labels(root_dir, split, sample_size)
-
-            self.transform = transform
-
-        def __len__(self):
-            return len(self.labels)
-
-        def __getitem__(self, idx):
+        else:
             sat_name = self.labels.iloc[idx]["class"]
-            img_name = self.labels.iloc[idx]["filename"]
-            image_name = f"{self.root_dir}/{img_name}"
+            bbox = self.labels.iloc[idx]["bbox"]
+            bbox = literal_eval(bbox)
+            return torch_image, self.class_map[sat_name], torch.tensor(bbox)
 
-            image = io.imread(image_name)
 
-            if self.transform is not None:
-                torch_image = self.transform(image)
-
-            else:
-                torch_image = torch.from_numpy(image).permute(2, 1, 0)
-
-            if self.detection:
-                bbox = self.labels.iloc[idx]["bbox"]
-                bbox = literal_eval(bbox)
-
-                return torch_image, self.class_map[sat_name], torch.tensor(bbox)
-
-            return torch_image, torch.tensor(self.class_map[sat_name])
-
-else:
-
-    class PyTorchSparkDataset:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("Pytorch is not available!")
