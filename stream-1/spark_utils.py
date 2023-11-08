@@ -8,32 +8,22 @@ import matplotlib.patches as mpatches
 from torch.utils.data import Dataset
 from torch import tensor, from_numpy
 
-def process_labels(labels_dir, split, sample_size):
-    path = os.path.join(labels_dir, f"{split}.csv")
-    labels = pd.read_csv(path)
-
-    # Check if sample_size is in the correct range
-    if not 0 <= sample_size <= 1:
-        raise ValueError("sample_size must be between 0 and 1")
-    elif sample_size == 1:
-        return labels
-    else:
-        # Group the dataframe by class and sample from each group
-        sampled_labels = (
-            labels.groupby("class")
-            .apply(lambda x: x.sample(frac=sample_size, random_state=1))
-            .reset_index(drop=True)
-        )
-        return sampled_labels
-
 class SPARKDataset:
 
     """Class for dataset inspection: easily accessing single images, and corresponding ground truth pose data."""
 
-    def __init__(self, class_map, root_dir="./data", split="train", sample_size=1):
+    def __init__(self, class_map, root_dir="./data", split="train"):
         self.root_dir = os.path.join(root_dir, split)
-        self.labels = process_labels(root_dir, split, sample_size)
+        self.labels = self.process_labels(root_dir, split)
         self.class_map = class_map
+
+    def __len__(self):
+        return len(self.labels)
+
+    def process_labels(self, labels_dir, split):
+        path = os.path.join(labels_dir, f"{split}.csv")
+        labels = pd.read_csv(path)
+        return  labels
 
     def get_image(self, i=0):
         """Loading image as PIL image."""
@@ -106,8 +96,26 @@ class PyTorchSparkDataset(Dataset):
         self.class_map = class_map
         self.split = split
         self.root_dir = os.path.join(root_dir, self.split)
-        self.labels = process_labels(root_dir, split, sample_size)
+        self.labels =self.process_labels(root_dir, split, sample_size)
         self.transform = transform
+
+    def process_labels(self, labels_dir, split, sample_size):
+        path = os.path.join(labels_dir, f"{split}.csv")
+        labels = pd.read_csv(path)
+
+        # Check if sample_size is in the correct range
+        if not 0 <= sample_size <= 1:
+            raise ValueError("sample_size must be between 0 and 1")
+        elif sample_size == 1:
+            return labels
+        else:
+            # Group the dataframe by class and sample from each group
+            sampled_labels = (
+                labels.groupby("class")
+                .apply(lambda x: x.sample(frac=sample_size, random_state=1))
+                .reset_index(drop=True)
+            )
+            return sampled_labels
 
     def __len__(self):
         return len(self.labels)
