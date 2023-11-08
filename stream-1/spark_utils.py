@@ -14,6 +14,9 @@ from torch.utils.data import Dataset
 import torch
 
 def process_labels(labels_dir, split, sample_size):
+    if split == "test":
+        raise ValueError("Cannot sample from test set")
+
     path = os.path.join(labels_dir, f"{split}.csv")
     labels = pd.read_csv(path)
 
@@ -189,7 +192,7 @@ class PyTorchSparkDataset(Dataset):
         torch_image = torch.from_numpy(image).permute(2, 1, 0)
 
         if self.split == 'test':
-            return torch_image, image_name
+            return torch_image, img_name
 
         else:
             sat_name = self.labels.iloc[idx]["class"]
