@@ -1,10 +1,12 @@
 data/test/img*
 data/train/img*
 data/validation/img*
+
 train.zip
 validation.zip
 test.zip
-visualize_data.py
+
+data/predictions.csv
 
 .DS_Store
 __pycache__/*
