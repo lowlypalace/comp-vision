@@ -13,8 +13,10 @@ class SPARKDataset:
     """Class for dataset inspection: easily accessing single images, and corresponding ground truth pose data."""
 
     def __init__(self, class_map, root_dir="./data", split="train"):
-        self.root_dir = os.path.join(root_dir, split)
         self.labels = self.process_labels(root_dir, split)
+        if split == 'predictions':
+            split = 'test'
+        self.root_dir = os.path.join(root_dir, split)
         self.class_map = class_map
 
     def __len__(self):
