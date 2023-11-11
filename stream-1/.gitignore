@@ -8,5 +8,7 @@ test.zip
 
 data/predictions.csv
 
+*.pth
+
 .DS_Store
 __pycache__/*
