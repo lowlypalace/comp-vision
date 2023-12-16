@@ -6,8 +6,6 @@ train.zip
 validation.zip
 test.zip
 
-data/predictions.csv
-
 *.pth
 *.pkl
 
